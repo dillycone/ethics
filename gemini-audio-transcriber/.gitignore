@@ -5,3 +5,6 @@ dist/
 
 # TypeScript build output
 *.tsbuildinfo
+
+# Backup files
+*.old.ts
