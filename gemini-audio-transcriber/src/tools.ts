@@ -28,6 +28,14 @@ const sessionStorage = {
   lastSpeakers: undefined as SpeakerProfile[] | undefined,
 };
 
+function resetSessionStorage(): void {
+  sessionStorage.lastTranscription = '';
+  sessionStorage.lastUsageMetadata = undefined;
+  sessionStorage.lastFilePath = '';
+  sessionStorage.lastModelChoice = '' as ModelChoice;
+  sessionStorage.lastSpeakers = undefined;
+}
+
 /**
  * Helper to resolve S3 config from environment
  */
@@ -153,6 +161,8 @@ export const audioTranscriberServer = createSdkMcpServer({
         })).optional().describe('Optional array of speaker profiles for better diarization'),
       },
       async ({ filePath, modelChoice, speakers }) => {
+        resetSessionStorage();
+
         // Validate file path
         const resolvedPath = path.isAbsolute(filePath)
           ? filePath
@@ -216,6 +226,7 @@ export const audioTranscriberServer = createSdkMcpServer({
             }]
           };
         } catch (error) {
+          resetSessionStorage();
           return {
             content: [{
               type: 'text' as const,
@@ -225,7 +236,6 @@ export const audioTranscriberServer = createSdkMcpServer({
         }
       }
     ),
-
     tool(
       'estimate_cost',
       'Estimate the cost of transcribing an audio file with a specific model',

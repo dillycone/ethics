@@ -3,9 +3,19 @@
  */
 
 import { query } from '@anthropic-ai/claude-code';
-import type { SDKMessage } from '@anthropic-ai/claude-code';
 import { audioTranscriberServer } from './tools.js';
 import { SYSTEM_PROMPT } from './agents.js';
+
+function longestCommonPrefixLength(a: string, b: string): number {
+  const maxLength = Math.min(a.length, b.length);
+  let index = 0;
+
+  while (index < maxLength && a[index] === b[index]) {
+    index += 1;
+  }
+
+  return index;
+}
 
 export interface TranscribeWithAgentOptions {
   prompt: string;
@@ -22,6 +32,7 @@ export async function transcribeWithAgent(options: TranscribeWithAgentOptions): 
 
   let result = '';
   let sessionId: string | undefined;
+  let streamedTextBuffer = '';
 
   console.log('\n🤖 Starting Claude Agent for Audio Transcription...\n');
 
@@ -60,22 +71,37 @@ export async function transcribeWithAgent(options: TranscribeWithAgentOptions): 
     else if (message.type === 'stream_event') {
       const event = (message as any).event;
       if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        result += event.delta.text;
+        streamedTextBuffer += event.delta.text;
         process.stdout.write(event.delta.text);
       }
     }
     // Handle complete assistant messages (fallback)
     else if (message.type === 'assistant') {
       const content = message.message.content;
+      let combinedText = '';
       for (const block of content) {
         if (block.type === 'text') {
-          // Only add if we haven't already streamed it
-          if (!result.includes(block.text)) {
-            result += block.text;
-            process.stdout.write(block.text);
-          }
+          combinedText += block.text;
         }
       }
+
+      if (combinedText.length > 0) {
+        if (streamedTextBuffer.length > 0) {
+          const sharedPrefixLength = longestCommonPrefixLength(streamedTextBuffer, combinedText);
+          const remainingText = combinedText.slice(sharedPrefixLength);
+          if (remainingText.length > 0) {
+            process.stdout.write(remainingText);
+          }
+        } else {
+          process.stdout.write(combinedText);
+        }
+        result += combinedText;
+      } else if (streamedTextBuffer.length > 0) {
+        // Some edge cases stream text without a final assistant payload.
+        result += streamedTextBuffer;
+      }
+
+      streamedTextBuffer = '';
     }
     // Handle result message with stats
     else if (message.type === 'result') {
@@ -97,6 +123,10 @@ export async function transcribeWithAgent(options: TranscribeWithAgentOptions): 
         }
       }
     }
+  }
+
+  if (streamedTextBuffer.length > 0) {
+    result += streamedTextBuffer;
   }
 
   return result;
