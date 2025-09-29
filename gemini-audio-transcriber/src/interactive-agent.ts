@@ -65,27 +65,32 @@ export async function runInteractiveAgent(): Promise<void> {
         content: input
       });
 
+      const options: Parameters<typeof query>[0]['options'] = {
+        model: 'claude-sonnet-4-5',
+        customSystemPrompt: SYSTEM_PROMPT,
+        includePartialMessages: true,
+        mcpServers: {
+          'audio-transcriber': audioTranscriberServer
+        },
+        // Pre-approve all transcriber tools so they work immediately
+        allowedTools: [
+          'mcp__audio-transcriber__list_audio_files',
+          'mcp__audio-transcriber__list_models',
+          'mcp__audio-transcriber__transcribe_audio',
+          'mcp__audio-transcriber__estimate_cost',
+          'mcp__audio-transcriber__save_report',
+          'mcp__audio-transcriber__get_transcription_text'
+        ]
+      };
+
+      if (conversationHistory.length > 1) {
+        // The SDK supports conversation history though the public typings omit it.
+        (options as Record<string, unknown>).conversationHistory = conversationHistory.slice(0, -1);
+      }
+
       const response = query({
         prompt: input,
-        options: {
-          model: 'claude-sonnet-4-5',
-          customSystemPrompt: SYSTEM_PROMPT,
-          includePartialMessages: true,
-          mcpServers: {
-            'audio-transcriber': audioTranscriberServer
-          },
-          // Pre-approve all transcriber tools so they work immediately
-          allowedTools: [
-            'mcp__audio-transcriber__list_audio_files',
-            'mcp__audio-transcriber__list_models',
-            'mcp__audio-transcriber__transcribe_audio',
-            'mcp__audio-transcriber__estimate_cost',
-            'mcp__audio-transcriber__save_report',
-            'mcp__audio-transcriber__get_transcription_text'
-          ],
-          // Pass conversation history for context continuity
-          conversationHistory: conversationHistory.length > 1 ? conversationHistory.slice(0, -1) : undefined
-        }
+        options
       });
 
       let assistantMessage = '';
